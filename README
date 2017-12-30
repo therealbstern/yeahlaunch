@@ -1,3 +1,54 @@
+Installation can be performed with:
+
+make
+su -c "make -C `pwd` install"
+
+or, if you use sudo,
+
+make
+sudo make install
+
+
+My .yeahlaunchrc now contains:
+
+-bg=blue
+Firefox=firefox
+Thunderbird=thunderbird
+=
+XTerm=/usr/bin/xterm
+=
+OpenOffice=/opt/openoffice4/program/soffice
+Writer=/opt/openoffice4/program/swriter
+Calc=/opt/openoffice4/program/scalc
+Math=/opt/openoffice4/program/smath
+Base=/opt/openoffice4/program/sbase
+Impress=/opt/openoffice4/program/simpress
+Printers=/opt/openoffice4/program/spadmin
+=
+XSane=/usr/bin/xsane
+XFig=/usr/bin/xfig -nosplash
+GIMP=/usr/bin/gimp
+XCalc=/usr/bin/xcalc
+XMag=/usr/bin/xmag
+
+
+New in 0.4:
+
+If you have just an = on its own in the config file, yeahlaunch will build its
+own separator, so you don't need the weird
+
+    =/bin/false
+
+line any more.  You can still use it if you want variable width separators,
+though.
+
+If you don't specify -x or -rx, on the command line or in the config file,
+then the launcher will center itself on the top of your screen.
+
+A missing configuration file no longer causes an annoying message.
+
+Minor code cleanups.
+
 New in 0.3:
 
 yeahlaunch will now read a configuration file named .yeahlaunchrc in your

@@ -7,8 +7,10 @@ PREFIX = /usr/local
 
 LIBS = -lX11 
 INCLUDES = -I/usr/X11R6/include 
-LIB_DIRS = -L/usr/X11R6/lib
-FLAGS = -Os -Wall
+# On modern distributions, this seems to be unneeded.  Uncomment and fix as
+# needed if the build breaks.
+# LIB_DIRS = -L/usr/X11R6/lib
+FLAGS = -Os -Wall -Werror
 
 OBJECTS := yeahlaunch.o
 SOURCES := yeahlaunch.c
