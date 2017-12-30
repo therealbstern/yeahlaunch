@@ -152,12 +152,6 @@ int main(int argc, char *argv[]) {
     XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_afg, &afg, &dummy);
     XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_bg, &bg, &dummy);
 
-    font = XLoadQueryFont(dpy, opt_font);
-    height = font->/* max_bounds. */ascent + font->/* max_bounds. */descent + 3;
-    XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_fg, &fg, &dummy);
-    XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_afg, &afg, &dummy);
-    XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_bg, &bg, &dummy);
-
     gv.font = font->fid;
     gv.foreground = fg.pixel;
     gv.function = GXcopy;
