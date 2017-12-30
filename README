@@ -1,3 +1,40 @@
+New in 0.3:
+
+yeahlaunch will now read a configuration file named .yeahlaunchrc in your
+home directory.  The format is:
+
+name=value
+
+where lines that begin with a dash (-) are treated as command-line arguments
+and everything else becomes a button title.
+
+If you want a different configuration for different invocations (multihead,
+different positions on the screen, etc.), you can pass -c on the command
+line to read an alternate configuration file.  (Using -c in the config file
+does nothing, though.)
+
+Here's an example of my .yeahlaunchrc:
+
+-x=600
+-bg=blue
+Firefox=firefox
+    =/bin/false
+VMWare=/usr/bin/vmplayer
+    =/bin/false
+OpenOffice=/opt/openoffice.org/program/soffice
+Writer=/opt/openoffice.org/program/swriter
+Calc=/opt/openoffice.org/program/scalc
+Math=/opt/openoffice.org/program/smath
+Base=/opt/openoffice.org/program/sbase
+Impress=/opt/openoffice.org/program/simpress
+Printers=/opt/openoffice.org/program/spadmin
+    =/bin/false
+XSane=/usr/bin/xsane
+XFig=/usr/bin/xfig
+
+The blanks act as spacers between "program groups."
+
+
 New in 0.2:
 
 The menu entry is highlighted when clicked (see -afg below).

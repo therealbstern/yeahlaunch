@@ -8,7 +8,8 @@
 /*                 ||----w |                                             */
 /*                 ||     ||                                             */
 /*                                                                       */
-/*  Copyright (C) knorke                                                 */
+/*  Copyright (c) knorke@phrat.de                                        */
+/*  Copyright (c) 2009 bstern@bstern.org                                 */
 /*                                                                       */
 /*  This program is free software; you can redistribute it and/or modify */
 /*  it under the terms of the GNU General Public License as published by */
@@ -32,27 +33,34 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#define draw_label(gc)  XDrawString(dpy, t->win, gc, 3, height - 4, t->label, strlen(t->label))
+#include <errno.h>
+
+#define DRAW_LABEL(gc) \
+    XDrawString(dpy, t->win, (gc), 3, height - 4, t->label, strlen(t->label))
+#define SAFE_FREE(x) { if ((x) != NULL) free(x); }
+#define RCFILE ".yeahlaunchrc"
 
 Display *dpy;
 Window root;
 int screen;
 XFontStruct *font;
 GC agc, gc, hgc;
-char *opt_font = "fixed";
-char *opt_fg = "white";
-char *opt_afg = "yellow";
-char *opt_bg = "black";
-int opt_x = 0;
-int opt_step = 3;
-int opt_rx = 0;
+char *conf = RCFILE;
+char *opt_font = NULL;
+char *opt_fg = NULL;
+char *opt_afg = NULL;
+char *opt_bg = NULL;
+int opt_x = -1;
+int opt_step = -1;
+int opt_rx = -1;
 int height;
 int raised = 0;
 int width = 0;
 XColor afg, fg, bg, dummy;
 typedef struct tab tab;
 struct tab {
-    tab *prev, *next;
+    tab *prev;
+    tab *next;
     char *label;
     char *cmd;
     int x, width;
@@ -66,6 +74,10 @@ tab *find_tab(Window w);
 void spawn(char *cmd);
 void handle_buttonpress(XEvent event);
 void hide(void);
+void draw_tabs(void);
+void readrc(void);
+void setwidths(tab *t);
+
 int main(int argc, char *argv[])
 {
     XEvent event;
@@ -80,29 +92,62 @@ int main(int argc, char *argv[])
     root = RootWindow(dpy, screen);
 
     for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-fn") && i + 1 < argc)
-            opt_font = argv[++i];
-
-        else if (!strcmp(argv[i], "-fg") && i + 1 < argc)
-            opt_fg = argv[++i];
-        else if (!strcmp(argv[i], "-afg") && i + 1 < argc)
-            opt_afg = argv[++i];
-        else if (!strcmp(argv[i], "-bg") && i + 1 < argc)
-            opt_bg = argv[++i];
-        else if (!strcmp(argv[i], "-x") && i + 1 < argc)
-            opt_x = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "-rx") && i + 1 < argc)
-            opt_rx = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "-step") && i + 1 < argc)
-            opt_step = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "-h")) {
-            printf("usage: yehalaunch label1 cmd1 label2 cmd2 ...\n"
-                   "options:\n" "-fg color\n" "-afg color\n" "-bg color\n" "-fn font name\n" "-x xoffset\n"
-                   "-rx xoffset(right aligned)\n""-step step size\n");
-            exit(0);
+        if (argv[i][0] == '-') {
+            if (!strcmp(&argv[i][1], "fn") && i + 1 < argc) {
+                SAFE_FREE(opt_font);
+                opt_font = strdup(argv[++i]);
+            } else if (!strcmp(&argv[i][1], "fg") && i + 1 < argc) {
+                SAFE_FREE(opt_fg);
+                opt_fg = strdup(argv[++i]);
+            } else if (!strcmp(&argv[i][1], "afg") && i + 1 < argc) {
+                SAFE_FREE(opt_afg);
+                opt_afg = strdup(argv[++i]);
+            } else if (!strcmp(&argv[i][1], "bg") && i + 1 < argc) {
+                SAFE_FREE(opt_bg);
+                opt_bg = strdup(argv[++i]);
+            } else if (!strcmp(&argv[i][1], "x") && i + 1 < argc) {
+                opt_x = atoi(argv[++i]);
+            } else if (!strcmp(&argv[i][1], "rx") && i + 1 < argc) {
+                opt_rx = atoi(argv[++i]);
+            } else if (!strcmp(&argv[i][1], "step") && i + 1 < argc) {
+                opt_step = atoi(argv[++i]);
+            } else if (!strcmp(&argv[i][1], "c") && i + 1 < argc) {
+                conf = argv[++i];
+            } else {
+                printf("usage: yeahlaunch label1 cmd1 label2 cmd2 ...\n"
+                       "options:\n"
+                       "-fg color\n"
+                       "-afg color\n"
+                       "-bg color\n"
+                       "-fn font name\n"
+                       "-x xoffset\n"
+                       "-rx xoffset(right aligned)\n"
+                       "-step step size\n"
+                       "-c config file\n");
+                exit(0);
+            }
+        } else {
+            make_new_tab(argv[i], argv[i + 1]);
+            i++;
         }
-
     }
+
+    readrc();
+
+    if (opt_font == NULL) opt_font = strdup("fixed");
+    if (opt_fg == NULL) opt_fg = strdup("white");
+    if (opt_afg == NULL) opt_afg = strdup("yellow");
+    if (opt_bg == NULL) opt_bg = strdup("black");
+    if (opt_x == -1) opt_x = 0;
+    if (opt_rx == -1) opt_rx = 0;
+    if (opt_step == -1) opt_step = 3;
+
+    font = XLoadQueryFont(dpy, opt_font);
+    height = font-> /* max_bounds. */ ascent + font-> /* max_bounds. */ descent + 3;
+    XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_fg, &fg, &dummy);
+    XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_afg, &afg, &dummy);
+    XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_bg, &bg, &dummy);
+
     font = XLoadQueryFont(dpy, opt_font);
     height = font-> /* max_bounds. */ ascent + font-> /* max_bounds. */ descent + 3;
     XAllocNamedColor(dpy, DefaultColormap(dpy, screen), opt_fg, &fg, &dummy);
@@ -116,12 +161,8 @@ int main(int argc, char *argv[])
     gv.foreground = afg.pixel;
     agc = XCreateGC(dpy, root, GCFunction | GCForeground | GCFont, &gv);
 
-    for (i = 1; i < argc; i++) {
-        if (!strncmp(argv[i], "-", 1) && i + 1 < argc)
-            i++;
-        else if (i + 1 < argc)
-            make_new_tab(argv[++i], argv[i]);
-    }
+    draw_tabs();
+
     for (t = head_tab; t; t = t->next)
         width += t->width;
     if (opt_rx) {
@@ -172,7 +213,7 @@ int main(int argc, char *argv[])
         case Expose:
             if (event.xexpose.count == 0) {
                 t = find_tab(event.xexpose.window);
-                draw_label(gc);
+                DRAW_LABEL(gc);
                 XFlush(dpy);
             }
 
@@ -182,40 +223,69 @@ int main(int argc, char *argv[])
                 handle_buttonpress(event);
         }
     }
+    SAFE_FREE(opt_font);
+    SAFE_FREE(opt_fg);
+    SAFE_FREE(opt_afg);
+    SAFE_FREE(opt_bg);
+
+    for (t = head_tab; t != NULL; t = t->next) {
+        SAFE_FREE(t->prev);
+        SAFE_FREE(t->label);
+        SAFE_FREE(t->cmd);
+        if (t->next == NULL) {
+            free(t);
+            t = NULL;
+        }
+    }
     return 0;
 }
 
-void make_new_tab(char *cmd, char *label)
-{
+void draw_tabs(void) {
     XSetWindowAttributes attrib;
     attrib.override_redirect = True;
     attrib.background_pixel = bg.pixel;
+    tab *t;
 
-    tab *t = (tab *) malloc(sizeof(tab));
-    if (t) {
+    setwidths(head_tab);
+    for (t = head_tab; t != NULL; t = t->next) {
+        t->win = XCreateWindow(dpy, root, t->x, -height + 1, t->width, height,
+            0, CopyFromParent, InputOutput, CopyFromParent,
+            CWOverrideRedirect | CWBackPixel, &attrib);
+        XSelectInput(dpy, t->win,
+            EnterWindowMask | LeaveWindowMask | ButtonPressMask | ButtonReleaseMask | ExposureMask);
+        XMapWindow(dpy, t->win);
+    }
+}
+
+void make_new_tab(char *label, char *cmd)
+{
+    tab *t;
+
+    if ((t = (tab *)malloc(sizeof (tab))) != NULL) {
         if (!head_tab) {
             t->next = t->prev = NULL;
             t->x = opt_x;
-            head_tab = t;
         } else {
             t->next = head_tab;
             t->prev = NULL;
             head_tab->prev = t;
-            t->x = head_tab->x + head_tab->width;
-            head_tab = t;
         }
-        head_tab->label = label;
-        head_tab->cmd = cmd;
-        head_tab->width = XTextWidth(font, head_tab->label, strlen(head_tab->label)) + 6;
-        head_tab->win = XCreateWindow(dpy, root,
-                                      head_tab->x, -height + 1, head_tab->width, height,
-                                      0, CopyFromParent, InputOutput, CopyFromParent, CWOverrideRedirect | CWBackPixel,
-                                      &attrib);
-        XSelectInput(dpy, head_tab->win,
-                     EnterWindowMask | LeaveWindowMask | ButtonPressMask | ButtonReleaseMask | ExposureMask);
-        XMapWindow(dpy, head_tab->win);
-    } else
-        fprintf(stderr, "yeahlaunch: malloc() failed!");
+        head_tab = t;
+        head_tab->label = strdup(label);
+        head_tab->cmd = strdup(cmd);
+    } else {
+        fprintf(stderr, "yeahlaunch: malloc() failed: %s", strerror(errno));
+    }
+}
+
+void setwidths(tab *t) {
+    if (t->next != NULL) {
+        setwidths(t->next);
+        t->x = t->next->x + t->next->width;
+    } else {
+        t->x = opt_x;
+    }
+    t->width = XTextWidth(font, t->label, strlen(t->label)) + 6;
 }
 
 tab *find_tab(Window w)
@@ -256,20 +326,20 @@ void handle_buttonpress(XEvent event)
     do {
         XMaskEvent(dpy, ButtonReleaseMask | LeaveWindowMask | EnterWindowMask, &event);
         if (event.type == LeaveNotify) {
-            draw_label(gc);
+            DRAW_LABEL(gc);
             in--;
         } else if (event.type == EnterNotify && find_tab(event.xcrossing.window) == t) {
-            draw_label(agc);
+            DRAW_LABEL(agc);
             in++;
         }
     } while (event.type != ButtonRelease);
     if (in) {
         spawn(t->cmd);
         /* for (in = 0; in < 3; in++) {
-           draw_label(agc);
+           DRAW_LABEL(agc);
            XSync(dpy, False);
            usleep(10000);
-           draw_label(gc);
+           DRAW_LABEL(gc);
            XSync(dpy, False);
            usleep(10000); 
 
@@ -277,7 +347,7 @@ void handle_buttonpress(XEvent event)
         if (event.xbutton.button == Button3)
             hide();
     }
-    draw_label(gc);
+    DRAW_LABEL(gc);
 }
 
 void hide()
@@ -288,4 +358,67 @@ void hide()
         // XLowerWindow(dpy, t->win);
     }
     raised = 0;
+}
+
+void readrc(void) {
+    char *home;
+    FILE *f;
+    char buf[BUFSIZ];
+    char *idx;
+    int line = 0;
+
+    if ((home = getenv("HOME")) != NULL) {
+        if (chdir(home) < 0) {
+            fprintf(stderr, "Warning: could not cd to %s: %s\n",
+                home, strerror(errno));
+        }
+    }
+
+    if ((f = fopen(conf, "r")) != NULL) {
+        while (fgets(buf, BUFSIZ, f) != NULL) {
+            line++;
+            buf[BUFSIZ - 1] = 0;
+            if ((idx = strchr(buf, '#')) != NULL) *idx = 0;
+            if ((idx = strchr(buf, '\n')) != NULL) *idx = 0;
+            if (!buf[0]) continue;
+
+            if (0) printf("Found line %d: `%s'\n", line, buf);
+
+            if ((idx = strchr(buf, '=')) == NULL) {
+                fprintf(stderr,
+                    "Syntax error on line %d of %s: `%s'\n",
+                    line, conf, buf);
+                continue;
+            }
+            *idx = 0;
+
+            if (buf[0] == '-') {
+                if (!strcmp(&buf[1], "fn")) {
+                    if (opt_font == NULL) opt_font = strdup(idx + 1);
+                } else if (!strcmp(&buf[1], "fg")) {
+                    if (opt_fg == NULL) opt_fg = strdup(idx + 1);
+                } else if (!strcmp(&buf[1], "afg")) {
+                    if (opt_afg == NULL) opt_afg = strdup(idx + 1);
+                } else if (!strcmp(&buf[1], "bg")) {
+                    if (opt_bg == NULL) opt_bg = strdup(idx + 1);
+                } else if (!strcmp(&buf[1], "x")) {
+                    if (opt_x == -1) opt_x = atoi(idx + 1);
+                } else if (!strcmp(&buf[1], "rx")) {
+                    if (opt_rx == -1) opt_rx = atoi(idx + 1);
+                } else if (!strcmp(&buf[1], "step")) {
+                    if (opt_step == -1) opt_step = atoi(idx + 1);
+                } else {
+                    fprintf(stderr,
+                        "Unknown option on line %d of %s: `%s=%s'\n",
+                        line, conf, buf, idx + 1);
+                }
+            } else {
+                make_new_tab(buf, idx + 1);
+            }
+        }
+        fclose(f);
+    } else {
+        fprintf(stderr, "Warning: could not fopen(%s): %s\n",
+            conf, strerror(errno));
+    }
 }
